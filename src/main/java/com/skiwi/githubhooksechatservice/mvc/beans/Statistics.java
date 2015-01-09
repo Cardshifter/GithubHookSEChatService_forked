@@ -4,6 +4,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.springframework.beans.factory.annotation.Autowired;
+
 import com.skiwi.githubhooksechatservice.events.github.GithubRepository;
 import com.skiwi.githubhooksechatservice.events.github.IssuesEvent;
 import com.skiwi.githubhooksechatservice.events.github.LegacyCommit;
@@ -13,6 +15,9 @@ import com.skiwi.githubhooksechatservice.events.travis.Repository;
 public class Statistics {
 
 	private final Map<String, RepositoryStats> repoStats;
+	
+	@Autowired
+	private MessageBean debug;
 	
 	public Statistics() {
 		repoStats = new ConcurrentHashMap<>();
@@ -37,7 +42,9 @@ public class Statistics {
 
 	public synchronized void fixRepositoryURL(Repository repository) {
 		for (RepositoryStats githubRepo : repoStats.values()) {
+			debug.debug("comparing " + githubRepo.getName() + " with " + repository.getName());
 			if (repository.getFullNameGithubStyle().equals(githubRepo.getName())) {
+				debug.debug("match found, setting url to " + githubRepo.getUrl());
 				repository.setUrl(githubRepo.getUrl());
 			}
 		}

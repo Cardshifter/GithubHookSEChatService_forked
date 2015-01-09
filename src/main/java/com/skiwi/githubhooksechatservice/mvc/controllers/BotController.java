@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import com.skiwi.githubhooksechatservice.chatbot.ChatBot;
+import com.skiwi.githubhooksechatservice.mvc.beans.MessageBean;
 
 /**
  *
@@ -20,11 +21,27 @@ public class BotController {
 	@Autowired
 	private ChatBot chatBot;
 	
+	@Autowired
+	private MessageBean debug;
+	
     @RequestMapping(value = "/hello", method = RequestMethod.GET)
     @ResponseBody
     public String hello() {
         System.out.println("test");
         return "Hello World!";
+    }
+
+    @RequestMapping(value = "/debug", method = RequestMethod.GET)
+    @ResponseBody
+    public String debug() {
+    	return String.join("<br>\n", debug.retreiveDebug());
+    }
+
+    @RequestMapping(value = "/debugclear", method = RequestMethod.GET)
+    @ResponseBody
+    public String debugClear() {
+    	debug.reset();
+    	return "Cleared";
     }
 
     @RequestMapping(value = "/test", method = RequestMethod.GET)
