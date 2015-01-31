@@ -51,36 +51,28 @@ public class ScheduledTasks {
     @Autowired
     private GithubHookController controller;
 
-    @Scheduled(cron = "0 0 */2 * * *") // second minute hour day day day
+    @Scheduled(cron = "0 */15 * * * *") // second minute hour day day day
     public void scanRepos() {
-    	final int API_LIMIT = 4; // 12 times per hour, 4 items each time = 48 requests. API limit is 60. Leaves some space for other uses.
+    	final int API_LIMIT = 10; // 4 times per hour, 10 items each time = 40 requests. API limit is 60. Leaves some space for other uses.
     	try {
         	List<Followed> followed = new ArrayList<Followed>(githubService.getAll());
         	followed.sort(Comparator.comparingLong(follow -> follow.getLastChecked()));
         	followed.stream()
         		.limit(API_LIMIT)
-        		.forEach(this::scanFollowed);
+        		.allMatch(this::scanFollowed);
     	}
     	catch (Exception ex) {
     		ex.printStackTrace();
     	}
-    	
-    	/* 
-    	 * API call to https://api.github.com/rate_limit , read rate limit
-    	 * API call to https://api.github.com/repos/Tejpbit/CodeIT/events?page=1
-    	 * API call to https://api.github.com/users/Zomis/received_events/public -- ping the chat user
-    	 * API call to https://api.github.com/repos/Tejpbit/CodeIT/commits?page=1&since=YYYY-MM-DDTHH:MM:SSZ
-    	 * 
-    	 * */
     }
     
-    private void scanFollowed(final Followed follow) {
+    private boolean scanFollowed(final Followed follow) {
     	long update = Instant.now().getEpochSecond();
     	List<AbstractEvent> events;
 		try {
 			events = githubBean.fetchEvents(follow);
 		} catch (IOException e) {
-    		return;
+    		return false;
     	}
 
     	WebhookParameters params = new WebhookParameters();
@@ -95,6 +87,7 @@ public class ScheduledTasks {
     	long eventId = events.stream().mapToLong(ev -> ev.getId()).max().orElse(follow.getLastEventId());
     	System.out.println("Update : " + eventId);
     	githubService.update(follow.getName(), update, eventId, follow.getFollowType() == 1);
+    	return true;
 	}
     
 	private void post(AbstractEvent event, long lastEventId, WebhookParameters params) {

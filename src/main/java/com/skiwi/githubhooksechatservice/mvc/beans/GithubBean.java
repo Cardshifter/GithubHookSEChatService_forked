@@ -1,13 +1,19 @@
 package com.skiwi.githubhooksechatservice.mvc.beans;
 
 import java.io.IOException;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.text.MessageFormat;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
+import com.fasterxml.jackson.core.JsonParseException;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.skiwi.githubhooksechatservice.events.github.AbstractEvent;
 import com.skiwi.githubhooksechatservice.events.github.CommitCommentEvent;
@@ -26,22 +32,47 @@ import com.skiwi.githubhooksechatservice.events.github.WatchEvent;
 import com.skiwi.githubhooksechatservice.events.github.classes.Commit;
 import com.skiwi.githubhooksechatservice.events.github.classes.LegacyCommit;
 import com.skiwi.githubhooksechatservice.events.github.classes.PingEvent;
+import com.skiwi.githubhooksechatservice.events.github.classes.RateLimitResponse;
 import com.skiwi.githubhooksechatservice.events.github.classes.WikiPage;
 import com.skiwi.githubhooksechatservice.model.Followed;
 
 public class GithubBean {
 	
+	private final ObjectMapper mapper = new ObjectMapper();
+	private final AtomicInteger remaining = new AtomicInteger();
+	private final AtomicLong reset = new AtomicLong();
+	
+	public void updateRateLimit() {
+		try {
+			RateLimitResponse rateLimit = apiRequest("rate_limit", RateLimitResponse.class);
+			remaining.set(rateLimit.getRate().getRemaining());
+			reset.set(rateLimit.getRate().getReset());
+		} catch (IOException e) {
+			remaining.set(0);
+		}
+	}
+	
+	public boolean isRequestAllowed() {
+		if (remaining.get() >= 10) {
+			return true;
+		}
+		return Instant.ofEpochSecond(reset.get()).isBefore(Instant.now());
+	}
+	
+	public <T> T apiRequest(String url, Class<T> resultClazz) throws JsonParseException, JsonMappingException, MalformedURLException, IOException {
+		if (!isRequestAllowed()) {
+			throw new IOException("Rate Limit");
+		}
+   		return mapper.readValue(new URL("https://api.github.com/" + url), resultClazz);
+	}
+	
 	public List<AbstractEvent> fetchEvents(Followed follow) throws IOException {
 		return fetchEvents(follow.getFollowType() == 1, follow.getName(), follow.getLastEventId());
 	}
 
-	private final ObjectMapper mapper = new ObjectMapper();
-	
 	private AbstractEvent[] fetchEventsByPage(boolean user, String name, int page) throws IOException {
    		String type = user ? "users" : "repos";
-   		URL url = new URL("https://api.github.com/" + type + "/" + name + "/events?page=" + page);
-   		AbstractEvent[] data = mapper.readValue(url, AbstractEvent[].class);
-   		return data;
+   		return apiRequest(type + "/" + name + "/events?page=" + page, AbstractEvent[].class);
 	}
 	
 	public List<AbstractEvent> fetchEvents(boolean user, String name, long lastEvent) throws IOException {
